@@ -1,0 +1,9 @@
+# secrets
+.env.local
+dev_hfr.ps1
+
+# vercel / cache / os
+.vercel/
+api/_cache/
+.DS_Store
+Thumbs.db

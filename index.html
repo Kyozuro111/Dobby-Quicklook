@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Dobby Quicklook</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <style>
+    :root{--bg:#0e1116;--panel:#151922;--text:#e6edf3;--muted:#9aa3b2;--accent:#0ba5ff;--ok:#33d17a;--warn:#ffcc00;--err:#ff6b6b;}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text)}
+    a{color:#9ad0ff;text-decoration:none}
+    .wrap{max-width:1100px;margin:32px auto;padding:0 16px}
+    h1{text-align:center;margin:0 0 12px}
+    .sub{text-align:center;color:var(--muted);margin-bottom:20px;font-size:14px}
+    .card{background:var(--panel);border-radius:12px;padding:16px;box-shadow:0 0 0 1px rgba(255,255,255,.04) inset}
+    .row{display:flex;gap:16px;flex-wrap:wrap}
+    .grow{flex:1 1 0;min-width:300px}
+    .inputbar{display:flex;gap:10px}
+    input[type=text]{flex:1;background:#0b0e14;color:var(--text);border:1px solid #222839;border-radius:10px;padding:12px 14px;outline:none}
+    button{background:#0b66c3;color:#fff;border:none;border-radius:10px;padding:12px 16px;cursor:pointer}
+    button[disabled]{opacity:.6;cursor:not-allowed}
+    .chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}
+    .chip{background:#0e1320;border:1px solid #1f2638;border-radius:999px;padding:6px 10px;font-size:12px;cursor:pointer;color:#c9d4e3}
+    .pair{display:grid;grid-template-columns:180px 1fr;gap:4px;margin:10px 0;font-size:14px}
+    .label{color:var(--muted)}
+    .value{color:#fff}
+    .green{color:var(--ok)} .red{color:var(--err)}
+    .range{display:flex;gap:8px;justify-content:flex-end;margin-bottom:6px}
+    .range button{background:#121827;padding:6px 10px;border-radius:8px;font-size:12px}
+    .range button.active{background:#0b66c3}
+    .aiBox{min-height:120px;white-space:pre-wrap;font-family:ui-monospace,Consolas,Menlo,monospace;color:#d8e1f0}
+    .foot{text-align:center;color:#6b7484;font-size:12px;margin-top:24px}
+
+    /* Dobby banner (big mascot on top) */
+    .hero{display:flex;justify-content:center;margin:4px 0 8px}
+    .hero .dobby{width:clamp(110px,18vw,180px);height:auto;filter:drop-shadow(0 10px 18px rgba(0,0,0,.35));user-select:none;-webkit-user-drag:none}
+
+    /* Dobby badge in AI box */
+    .aiHead{display:flex;align-items:center;gap:10px}
+    .avatar{width:28px;height:28px;border-radius:50%;overflow:hidden;border:1px solid #1f2638;flex:0 0 28px}
+    .avatar img{width:100%;height:100%;object-fit:cover;object-position:center}
+    .aiNote{display:none;margin-top:12px;background:#2a2107;border:1px solid #584200;color:#f5d482;border-radius:10px;padding:10px 12px;font-size:13px}
+    .aiNote.show{display:block}
+    .errLine{color:var(--err);font-family:ui-monospace,Consolas,Menlo,monospace}
+
+    /* Notice styling under title */
+    .notice{color:var(--warn);font-weight:600}
+  </style>
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Big Dobby mascot -->
+  <div class="hero">
+    <img src="assets/dobby.png" alt="Dobby mascot" class="dobby">
+  </div>
+
+  <h1>Dobby Quicklook</h1>
+
+  <!-- Global notice (replace old “Made by …” line) -->
+  <div class="sub notice">
+    If you hit an AI or market-data error, it’s usually temporary throttling from providers.
+    Please wait ~30 seconds, press <b>F5</b>, and try again. 
+  </div>
+
+  <div class="card">
+    <div class="inputbar">
+      <input id="symbolInput" placeholder="Symbol (e.g., SOL, ETH, BTC) or contract (0x...)" autocomplete="off"/>
+      <button id="btnLookup">Lookup</button>
+    </div>
+    <div class="chips" id="quickChips">
+      <span class="chip">SOL</span><span class="chip">ETH</span><span class="chip">BTC</span><span class="chip">XRP</span><span class="chip">TIA</span>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:16px">
+    <div class="card grow">
+      <div id="panelTitle" style="color:#9aa3b2;margin-bottom:8px;">—</div>
+      <div class="pair"><div class="label">Price</div><div class="value" id="v_price">—</div></div>
+      <div class="pair"><div class="label">24h Change</div><div class="value" id="v_chg">—</div></div>
+      <div class="pair"><div class="label">Market Cap</div><div class="value" id="v_mcap">—</div></div>
+      <div class="pair"><div class="label">Volume 24h</div><div class="value" id="v_vol">—</div></div>
+      <div class="pair"><div class="label">Top DEX Pair (if contract)</div><div class="value" id="v_pair">N/A</div></div>
+      <div style="color:#9aa3b2;margin-top:8px">Sources: CoinGecko &amp; DexScreener (proxied)</div>
+    </div>
+    <div class="card grow">
+      <div class="range">
+        <button data-d="7">7D</button>
+        <button data-d="30" class="active">30D</button>
+        <button data-d="90">90D</button>
+      </div>
+      <div id="chart" style="height:320px;"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="aiHead">
+      <div style="color:#9aa3b2">AI Analysis</div>
+      <div class="avatar"><img src="assets/dobby.png" alt="Dobby"/></div>
+      <div style="flex:1"></div>
+      <button id="btnAnalyze">AI Analyze</button>
+    </div>
+    <div id="aiText" class="aiBox" style="margin-top:8px;">Click “AI Analyze”.</div>
+    <div id="aiNotice" class="aiNote"></div>
+  </div>
+
+  <div class="foot">© 2025 Kyozuro — Built for the Sentient ecosystem</div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmtMoney = n => (n==null||!isFinite(n)) ? '—' :
+  (Math.abs(n)>=1e12? '$'+(n/1e12).toFixed(2)+'T' :
+   Math.abs(n)>=1e9 ? '$'+(n/1e9 ).toFixed(2)+'B' :
+   Math.abs(n)>=1e6 ? '$'+(n/1e6 ).toFixed(2)+'M' :
+   Math.abs(n)>=1e3 ? '$'+(n/1e3 ).toFixed(2)+'K' :
+   '$'+Number(n).toLocaleString(undefined,{maximumFractionDigits:6}));
+const fmtPct = p => (p==null||!isFinite(p)) ? '—' : ((p>=0?'+':'')+p.toFixed(2)+'%');
+function debounce(fn,ms=500){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
+
+let currentSymbol='SOL', currentDays=30;
+let lcChart, cSeries;
+
+function ensureChart(){
+  if (lcChart) return;
+  lcChart = LightweightCharts.createChart($('#chart'), {
+    layout:{background:{color:'#151922'}, textColor:'#d9e1ee'},
+    grid:{vertLines:{color:'#1f2638'}, horzLines:{color:'#1f2638'}},
+    timeScale:{borderColor:'#222839'}, rightPriceScale:{borderColor:'#222839'},
+    crosshair:{mode:LightweightCharts.CrosshairMode.Magnet}
+  });
+  cSeries = lcChart.addCandlestickSeries();
+}
+
+async function fetchJSON(url){
+  const r = await fetch(url, {headers:{'Accept':'application/json'}});
+  if (!r.ok){ const t = await r.text().catch(()=> ''); throw new Error(`HTTP ${r.status}: ${t.slice(0,180)}`) }
+  return r.json();
+}
+
+async function loadBySymbol(symbol){
+  $('#panelTitle').textContent = 'Loading...';
+  $('#btnLookup').disabled = true;
+  const base = '';
+  const q1 = fetchJSON(`${base}/api/quicklook?symbol=${encodeURIComponent(symbol)}`).catch(e=>({__error:e}));
+  const q2 = fetchJSON(`${base}/api/ohlc?symbol=${encodeURIComponent(symbol)}&days=${currentDays}`).catch(e=>({__error:e}));
+
+  const [a,b] = await Promise.all([q1,q2]);
+
+  // quicklook
+  try{
+    if (!a.__error){
+      const name = a?.data?.name || a?.name || symbol;
+      const price = a?.data?.price ?? a?.price ?? null;
+      const pct   = a?.data?.pct   ?? a?.pct   ?? null;
+      const mcap  = a?.data?.mcap  ?? a?.mcap  ?? null;
+      const vol   = a?.data?.vol24 ?? a?.vol   ?? null;
+      const pair  = a?.data?.topPair || a?.topPair;
+
+      $('#panelTitle').textContent = `${name} (${symbol}) — ${new Date().toLocaleString()}`;
+      $('#v_price').textContent = fmtMoney(price);
+      $('#v_chg').textContent = fmtPct(pct);
+      $('#v_chg').className = 'value ' + (pct>=0?'green':'red');
+      $('#v_mcap').textContent = fmtMoney(mcap);
+      $('#v_vol').textContent = fmtMoney(vol);
+      $('#v_pair').textContent = pair ? pair : 'N/A (paste contract address to see DEX liquidity)';
+    }
+  }catch{}
+
+  // ohlc
+  if (b.__error){ $('#panelTitle').innerHTML = `<span class="errLine">${b.__error.message}</span>`; $('#btnLookup').disabled=false; return;}
+  const candles = Array.isArray(b?.candles) ? b.candles : [];
+  if (!candles.length){ $('#panelTitle').innerHTML = `<span class="errLine">No market data</span>`; $('#btnLookup').disabled=false; return;}
+
+  ensureChart();
+  const data = candles.map(c=>({time:Number(c.time),open:+c.open,high:+c.high,low:+c.low,close:+c.close}))
+                      .filter(d=>isFinite(d.time)&&isFinite(d.close));
+  cSeries.setData(data);
+  $('#btnLookup').disabled = false;
+}
+
+async function runAnalyze(){
+  const base='';
+  $('#aiNotice').classList.remove('show');
+  $('#aiText').textContent='Analyzing...';
+  try{
+    const r = await fetch(`${base}/api/analyze?symbol=${encodeURIComponent(currentSymbol)}&days=${currentDays}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    $('#aiText').textContent = (j?.analysis || 'Analysis failed.').trim() + `\n\n[Source: ${j?.source || 'n/a'}]`;
+  }catch(e){
+    $('#aiText').textContent='Analysis failed.';
+    $('#aiNotice').innerHTML =
+      `Heads up — Temporary service issue from AI (Hugging Face). Free quotas may throttle if you query too quickly.<br/>
+       Please wait ~30 seconds, then press <b>F5</b> and try again.<br/>
+       <span class="errLine">Details: ${e.message || 'unknown'}</span>`;
+    $('#aiNotice').classList.add('show');
+  }
+}
+
+// UI
+const debouncedLookup = debounce(async ()=>{
+  const v = $('#symbolInput').value.trim(); if (!v) return;
+  currentSymbol = v.toUpperCase(); await loadBySymbol(currentSymbol);
+});
+$('#symbolInput').addEventListener('input', debouncedLookup);
+$('#btnLookup').addEventListener('click', async ()=>{
+  const v=$('#symbolInput').value.trim()||currentSymbol; currentSymbol=v.toUpperCase(); await loadBySymbol(currentSymbol);
+});
+$('#quickChips').addEventListener('click', e=>{
+  if (!e.target.classList.contains('chip')) return;
+  $('#symbolInput').value = e.target.textContent.trim(); debouncedLookup();
+});
+document.querySelectorAll('.range button').forEach(btn=>{
+  btn.addEventListener('click', async ()=>{
+    document.querySelectorAll('.range button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); currentDays=Number(btn.dataset.d||30); await loadBySymbol(currentSymbol);
+  });
+});
+let cooling=false;
+$('#btnAnalyze').addEventListener('click', async ()=>{
+  if (cooling) return; cooling=true; $('#btnAnalyze').disabled=true;
+  try{ await runAnalyze(); } finally{ setTimeout(()=>{ cooling=false; $('#btnAnalyze').disabled=false; }, 2500); }
+});
+
+window.addEventListener('DOMContentLoaded', async ()=>{
+  $('#symbolInput').value=currentSymbol; await loadBySymbol(currentSymbol);
+});
+</script>
+</body>
+</html>
