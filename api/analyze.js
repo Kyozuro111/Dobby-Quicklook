@@ -81,7 +81,7 @@ module.exports = async (req, res) => {
       if (chg7d != null) bullets.push(`7D change: ${chg7d.toFixed(2)}%.`);
       bullets.push('Not financial advice.');
       analysis = '• ' + bullets.join('\n• ');
-      provider = 'rule';
+      provider = 'Sentient';
     }
 
     return res.status(200).json({
